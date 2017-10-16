@@ -56,10 +56,75 @@ def max_disk_paratition():
     return  max_mount_area
 
 #数据文件目录
-datadir = max_disk_paratition()
-basedir = "/usr/local/mysql"
+data_dir = max_disk_paratition() + "/mysql/data"
+base_dir = "/usr/local/mysql"
 error = "error"
 output = "output"
+
+def chk_arguments():
+    # 设置必要的参数名称
+    global data_dir,base_dir
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host",type=str,dest="host",help="MySQL Server host")
+    parser.add_argument("--port",type=int,dest="port",help="MySQL Server port",default=3306)
+    parser.add_argument("--version",type=str,dest="version",help="MySQL Version",default='5.7')
+    parser.add_argument("--data-dir",type=str,dest="data_dir",help="MySQL data dir",default=data_dir)
+    parser.add_argument("--base-dir",type=str,dest="base_dir",help="MySQL base dir",default=base_dir)
+    parser.add_argument("--package",type=str,dest="package",help="MySQL install package path")
+    parser.add_argument("--ssh-port",type=int,dest="ssh_port",help="ssh2 port",default=22)
+    parser.add_argument("--ssh-user",type=str,dest="ssh_user",help="ssh2 username",default="root")
+    args = parser.parse_args()
+
+    if not args.host or not args.version:
+        print "\033[31m[error:] 输入远端host ip.\033[0m"
+        sys.exit(1)
+    if (args.version != '5.6' and args.version != '5.7'):
+        print "\033[31m[error:] 输入MySQL安装版本号[--version='5.6'|--version='5.7']\033[0m"
+        sys.exit(1)
+    if (args.ssh_port != 22 or args.ssh_user != "root"):
+        print "\033[31m[error:] 输入ssh username or port.\033[0m"
+        sys.exit(1)
+    if not args.package:
+        args.package = "/opt/mysql.tar.gz"
+
+    data_dir = args.data_dir
+    base_dir = args.base_dir
+    args.package_name = os.path.dirname(args.package)
+
+    return  args
+
+def mysql_install(args):
+    # 创建ssh
+    host_client = paramiko.SSHClient()
+    # 容许连接不在know_hosts文件中的主机
+    host_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    host_client.connect(args.host,port=args.ssh_port,username=args.ssh_user)
+
+
+
+def execute_remote_shell(host_client,cmd_shell):
+    result = {}
+    try:
+        print "\033[31m cmd_shell \033[0m"
+        stdin,stdout,stderr = host_client.exec_command(cmd_shell)
+        result[error] = stderr.readlines()
+        result[output] = stdout.readlines()
+        if len(result[error]>0):
+            print "\033[32mresult[error][0].replace('\n','') \033[0m"
+        else:
+            pass
+    except:
+        host_client.close()
+    return result
+
+
+# chk_arguments()
+
+
+
+
+# paramiko
+# http://www.cnblogs.com/gannan/archive/2012/02/06/2339883.html
 
 
 
