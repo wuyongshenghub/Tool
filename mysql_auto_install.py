@@ -100,6 +100,31 @@ def mysql_install(args):
     host_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     host_client.connect(args.host,port=args.ssh_port,username=args.ssh_user)
 
+    # 创建目录
+    print "create mysql data/base dir."
+    execute_remote_shell(host_client,"rm -rf {0}".format(data_dir))
+    execute_remote_shell(host_client,"rm -rf {0}".format(base_dir))
+    execute_remote_shell(host_client,"mkdir -p {0}".format(data_dir))
+    execute_remote_shell(host_client,"mkdir -p {0}".format(base_dir))
+
+    # 创建用户＆赋予权限
+    print "create group/user/grant."
+    execute_remote_shell(host_client,"groupadd mysql")
+    execute_remote_shell(host_client,"useradd mysql -g mysql")
+    execute_remote_shell(host_client,"chown -R mysql:mysql {0}".format(data_dir))
+
+    #copy mysql install package and copy remote host
+    print "copy mysql install package and copy remote host"
+    os.system("scp -P {0} {1} args.ssh_user@{2}:max_disk_paratition()/".format(args.ssh_port,args.package,args.host))
+    execute_remote_shell(host_client,"tar -zf max_disk_paratition()/{0} --strip-components=1 -C {1}".format(args.package_name,base_dir))
+
+    # 设置配置文件 同步到远程host
+    print "set mysql cnf and sync remote host"
+    server_id = get_server_id(host_client,args)
+
+
+def get_server_id(host_client,args):
+    execute_remote_shell(host_client,"ip addr ")
 
 
 def execute_remote_shell(host_client,cmd_shell):
