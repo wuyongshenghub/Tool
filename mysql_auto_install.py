@@ -120,11 +120,45 @@ def mysql_install(args):
 
     # 设置配置文件 同步到远程host
     print "set mysql cnf and sync remote host"
+    # get server_id
     server_id = get_server_id(host_client,args)
-
+    # get buffer_size/buffer_pool_instance
+    buffer_pool_size,buffer_pool_instance = get_buffer_pool_size(host_client)
+    # MySQL config parameter
+    config_val = mysql_config.format()
+    # my.cnf write to tmpfile
+    write_mysql_conf_to_file(args,config_val)
 
 def get_server_id(host_client,args):
-    execute_remote_shell(host_client,"ip addr ")
+    result = execute_remote_shell(host_client,"ip addr | grep inet | grep -v 127.0.0.1 | grep -v inet6 " "| awk \'{ print $2}\' | awk -F \"/\" \'{print $1}\' | awk -F \".\" \'{print $4}\'")
+
+    return args.port + result[output][0].replace("\n","")
+
+def get_buffer_pool_size(host_client):
+    result = execute_remote_shell(host_client,"free -g | head -n2 | tail -n1 | awk \'{print $2}\'")
+    buffer_pool_instance = 1
+    total_memory = int(result[output][0].replace("\n",""))
+    buffer_pool_memory = str(int(round(total_memory * 0.75))) + 'G'
+    if total_memory == 0:
+        buffer_pool_size = "1000M"
+        buffer_pool_instance = 1
+    elif (total_memory > 0 and total_memory <=2):
+        buffer_pool_instance = 2
+    elif (total_memory > 2 and total_memory <=8):
+        buffer_pool_instance = 3
+    elif (total_memory >8 and total_memory <= 16):
+        buffer_pool_instance = 4
+    elif total_memory > 16:
+        buffer_pool_instance = 8
+    return  (buffer_pool_size,buffer_pool_instance)
+
+def write_mysql_conf_to_file(args,config_val):
+    # 本地生成MySQL临时配置文件 然后传到到远程服务器
+    file_path = "/tmp/my.cnf"
+    with open(file_path,'w') as f:
+        f.write(config_val)
+    # scp -P 22 file root@192.168.137.11:/etc/
+    os.system("scp -P {0} {1} {2}@{3}:/etc/".format(args.ssh_port,file_path,args.ssh_user,args.host))
 
 
 def execute_remote_shell(host_client,cmd_shell):
@@ -142,7 +176,128 @@ def execute_remote_shell(host_client,cmd_shell):
         host_client.close()
     return result
 
+mysql_config = ("""
+[client]
+default_character_set = utf8
 
+[mysql]
+prompt = "\\u@\\h(\\d) \\\\r:\\\\m:\\\\s>"
+default_character_set = utf8
+
+[mysqld]
+server_id = {0}
+user = mysql
+port = {1}
+character_set_server = utf8
+basedir = {2}
+datadir = {3}
+socket = mysql.sock
+pid_file= mysql.pid
+log_error = mysql.err
+
+#innodb
+innodb_buffer_pool_size = {4}
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_log_at_timeout = 1
+innodb_flush_method = O_DIRECT
+innodb_support_xa = 1
+innodb_lock_wait_timeout = 3
+innodb_rollback_on_timeout = 1
+innodb_file_per_table = 1
+transaction_isolation = REPEATABLE-READ
+innodb_log_buffer_size = 16M
+innodb_log_file_size = 256M
+innodb_data_file_path = ibdata1:1G:autoextend
+#innodb_log_group_home_dir = ./
+innodb_log_files_in_group = 3 
+#innodb_force_recovery = 1
+#read_only = 1
+innodb_sort_buffer_size=2M
+innodb_online_alter_log_max_size=1G
+innodb_buffer_pool_instances = {5}
+innodb_buffer_pool_load_at_startup = 1
+innodb_buffer_pool_dump_at_shutdown = 1
+innodb_lru_scan_depth = 2000
+#innodb_file_format = Barracuda
+#innodb_file_format_max = Barracuda
+innodb_purge_threads = 8
+innodb_large_prefix = 1
+innodb_thread_concurrency = 0
+innodb_io_capacity = 300
+innodb_print_all_deadlocks = 1
+innodb_locks_unsafe_for_binlog = 1
+innodb_autoinc_lock_mode = 1
+innodb_open_files = 6000
+
+#replication
+log_bin = {6}/bin_log
+log_bin_index = {6}/bin_log_index
+binlog_format = ROW
+binlog_cache_size = 32M
+#max_binlog_cache_size = 50M
+max_binlog_size = 1G
+expire_logs_days = 7
+sync_binlog = 0
+skip_slave_start = 1
+binlog_rows_query_log_events = 1
+relay_log = {6}/relay_log
+relay_log_index = {6}/relay_log_index
+max_relay_log_size = 1G
+#relay_log_purge = 0
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+relay_log_recovery = 1
+log_slave_updates = 1
+#gtid
+#gtid_mode = ON
+#enforce_gtid_consistency = ON
+
+#slow_log
+slow_query_log = 1
+long_query_time = 2
+#log_output = TABLE
+slow_query_log_file = slow.log
+log_queries_not_using_indexes = 1
+log_throttle_queries_not_using_indexes = 30
+log_slow_admin_statements = 1
+log_slow_slave_statements = 1
+
+#thread buffer size
+tmp_table_size = 64M
+max_heap_table_size = 64M
+sort_buffer_size = 2M
+join_buffer_size = 2M
+read_buffer_size = 3M
+read_rnd_buffer_size = 3M
+key_buffer_size = 10M
+
+#other
+#sql_safe_updates = 1
+skip_name_resolve = 1
+open_files_limit = 65535
+max_connections = 3000
+max_connect_errors = 100000
+#max_user_connections = 150
+thread_cache_size = 64
+lower_case_table_names = 0
+query_cache_size = 0
+query_cache_type = 0
+max_allowed_packet = 1G
+#time_zone = SYSTEM
+lock_wait_timeout = 30
+#performance_schema = OFF
+table_open_cache_instances = 2
+metadata_locks_hash_instances = 8
+table_open_cache = 4000
+table_definition_cache = 2048
+
+#timeout
+wait_timeout = 300
+interactive_timeout = 300
+connect_timeout = 20
+""")
+
+mysql_install(chk_arguments())
 # chk_arguments()
 
 
