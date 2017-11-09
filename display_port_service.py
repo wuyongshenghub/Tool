@@ -83,15 +83,16 @@ if __name__ == "__main__":
         print "%s--->%s" % (val[0], val[1])
 
 执行结果
-python display_port_service.py - h = 192.168.137.11 - P = 22 - u = root - p = 123456
-host: 192.168.137.11 enable port service
-139 - -- > smbd
-111 - -- > rpcbind
-22 - -- > sshd
-631 - -- > cupsd
-25 - -- > master
-445 - -- > smbd
-56769 - -- > rpc.statd
-5672 - -- > qpidd
-3366 - -- > mysqld
-51301 - -- > rpc.statd
+python display_port_service.py -h=192.168.137.11 -P=22 -u=root -p=123456
+host:192.168.137.11 enable port service
+139--->smbd
+111--->rpcbind
+22--->sshd
+631--->cupsd
+25--->master
+445--->smbd
+56769--->rpc.statd
+5672--->qpidd
+3376--->mysqld
+51301--->rpc.statd
+
